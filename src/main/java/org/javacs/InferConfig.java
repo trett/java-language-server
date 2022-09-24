@@ -3,7 +3,9 @@ package org.javacs;
 import com.google.devtools.build.lib.analysis.AnalysisProtos;
 import com.google.devtools.build.lib.analysis.AnalysisProtosV2;
 import com.google.devtools.build.lib.analysis.AnalysisProtosV2.PathFragment;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -370,6 +372,7 @@ class InferConfig {
             "--include_aspects", // required for java_proto_library, see
             // https://stackoverflow.com/questions/63430530/bazel-aquery-returns-no-action-information-for-java-proto-library
             "--allow_analysis_failures",
+            "--keep_going",
             "mnemonic(" + filterMnemonic + ", " + kindUnion + ")"
         };
         var output = fork(bazelWorkspaceRoot, command);
@@ -487,11 +490,15 @@ class InferConfig {
                             .start();
             // Wait for process to exit
             var result = process.waitFor();
-            if (result != 0) {
-                LOG.severe("`" + String.join(" ", command) + "` returned " + result);
-                return NOT_FOUND;
+            if (result == 0) {
+                return output;
             }
-            return output;
+            try (var reader = new BufferedReader(new FileReader(output.toFile()))) {
+                if (reader.readLine() == null) {
+                    return NOT_FOUND;
+                }
+                return output;
+            }
         } catch (InterruptedException | IOException e) {
             throw new RuntimeException(e);
         }
